@@ -28,7 +28,7 @@ exports.getUserByCellphone = async (req, res) => {
     } catch (e) {
         res.status(500).json({
             status: 'failed',
-            error: e
+            error: e.toString()
         });
     }
 }

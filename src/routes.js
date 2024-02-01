@@ -8,7 +8,7 @@ const routes = express.Router();
 
 routes.get('/userbycellphone', usuarioController.getUserByCellphone);
 
-routes.get('/teams/:id_time/busydays', timeController.getTimeBusyDates);
+routes.get('/teams/:id_time/freedays', timeController.getTimeFreeDates);
 
 routes.get('/teams/:id_time/games', timeController.getTimeJogos);
 

@@ -1,1 +1,1 @@
-exports.DaysOfWeek = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+exports.DaysOfWeek = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sabado'];

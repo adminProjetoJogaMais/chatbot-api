@@ -4,7 +4,7 @@ const sequelize = require('sequelize');
 const Time = require('../models/Time');
 const { DaysOfWeek } = require('../utils/Enums')
 
-exports.getTimeBusyDates = async (req, res) => {
+exports.getTimeFreeDates = async (req, res) => {
     try {
         const { id_time } = req.params;
 
@@ -39,6 +39,10 @@ exports.getTimeBusyDates = async (req, res) => {
                     attributes: [[sequelize.fn('date_format', sequelize.col('jogosVisitante.data_hora'), '%Y-%m-%d'), 'data']],
                     required: false
                 },
+                {
+                    association: 'programacoes',
+                    required: false
+                },
             ]
         });
 
@@ -47,33 +51,61 @@ exports.getTimeBusyDates = async (req, res) => {
             message: 'cannot find team with provided id'
         });
 
-        const teamsBusyDates = team.bloquearDatas.concat(team.jogosMandante, team.jogosVisitante);
-        const teamsBusyDatesFormatted = teamsBusyDates.map(e => e.toJSON().data);
+        const teamsBusyDates = team.bloquearDatas.concat(team.jogosMandante, team.jogosVisitante).map(e => e.toJSON().data);
 
-        return res.json(teamsBusyDatesFormatted);
+        const teamsProgramacoes = team.programacoes.map(e => {
+            return {
+                dia: e.toJSON().dia,
+                hora_inicio: e.toJSON().hora_inicio,
+                hora_fim: e.toJSON().hora_fim
+            }
+        });
+
+        const teamsFreeDays = [];
+
+        for (var i = 0; i < 60; i++) {
+            var date = dateFrom.add(1, 'day');
+
+            const dayOfWeek = DaysOfWeek[date.day()];
+
+            const teamsProgramacaoForTheDay = teamsProgramacoes.find(e => e.dia === dayOfWeek);
+
+            if (!teamsBusyDates.includes(date.format('YYYY-MM-DD')) && teamsProgramacaoForTheDay) {
+                teamsFreeDays.push({
+                    data: date.format('YYYY/MM/DD'),
+                    hora_inicio: teamsProgramacaoForTheDay.hora_inicio,
+                    hora_fim: teamsProgramacaoForTheDay.hora_fim
+                })
+            }
+
+        }
+        return res.json(teamsFreeDays);
     } catch (e) {
         res.status(500).json({
             status: 'failed',
-            error: e
+            error: e.toString()
         });
     }
 }
 
 exports.getTimesAvailableAt = async (req, res) => {
     try {
-        const { data, genero, modalidade, uf, visitante, subregiao_order_by } = req.query;
+        var { data, hora_inicio, hora_fim, genero, modalidade, uf, visitante, subregiao_order_by } = req.query;
 
-        if (!data || !genero || !modalidade || !uf || visitante === null || visitante === undefined) {
+        if (!data || !hora_inicio || !hora_fim || !genero || !modalidade || !uf || visitante === null || visitante === undefined) {
             return res.status(400).json({
                 status: 'failed',
-                message: 'please provide all the required fields: data, genero, modalidade, uf, visitante'
+                message: 'please provide all the required fields: data, hora_inicio, hora_fim, genero, modalidade, uf, visitante'
             });
         };
 
+        //make sure visitante fields is always on the right format
+        if([true, 'true', 'True', 1].includes(visitante)) visitante = 1;
+        else visitante = 0;
+
         const parsedDate = moment(data);
         const day = parsedDate.format('YYYY/MM/DD');
-        const dayOfWeek = DaysOfWeek[parsedDate.day() + 1];
-        const time = parsedDate.format('HH:mm') + ':00';
+        const dayOfWeek = DaysOfWeek[parsedDate.day()];
 
         const teams = await Time.findAll({
             where: {
@@ -120,12 +152,17 @@ exports.getTimesAvailableAt = async (req, res) => {
                 },
                 {
                     association: 'programacoes',
-                    where: {
+                    where: visitante ? {
                         dia: dayOfWeek,
                         visitante: visitante,
-                        hora_inicio: { [Op.lte]: time },
-                        hora_fim: { [Op.gte]: time },
-                    }
+                        hora_inicio: { [Op.lte]: hora_inicio },
+                        hora_fim: { [Op.gte]: hora_fim },
+                    } : {
+                        dia: dayOfWeek,
+                        visitante: visitante,
+                        hora_inicio: { [Op.between]: [hora_inicio, hora_fim] }
+                    },
+                    attributes: ['hora_inicio', 'hora_fim'],
                 },
                 {
                     association: 'endereco',
@@ -147,7 +184,6 @@ exports.getTimesAvailableAt = async (req, res) => {
             delete formattedObj.bloquearDatas;
             delete formattedObj.jogosMandante;
             delete formattedObj.jogosVisitante;
-            delete formattedObj.programacoes;
 
             return formattedObj;
         });
@@ -161,7 +197,7 @@ exports.getTimesAvailableAt = async (req, res) => {
     } catch (e) {
         res.status(500).json({
             status: 'failed',
-            error: e
+            error: e.toString()
         });
     }
 }
@@ -206,7 +242,7 @@ exports.getTimeJogos = async (req, res) => {
     } catch (e) {
         res.status(500).json({
             status: 'failed',
-            error: e
+            error: e.toString()
         });
     }
 }
