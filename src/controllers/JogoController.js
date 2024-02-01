@@ -30,7 +30,7 @@ exports.create = async (req, res) => {
     } catch (e) {
         res.status(500).json({
             status: 'failed',
-            error: e
+            error: e.toString()
         });
     }
 }
@@ -63,7 +63,7 @@ exports.getJogo = async (req, res) => {
     } catch (e) {
         res.status(500).json({
             status: 'failed',
-            error: e
+            error: e.toString()
         });
     }
 }
