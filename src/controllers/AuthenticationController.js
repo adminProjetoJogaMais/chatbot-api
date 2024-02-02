@@ -5,7 +5,7 @@ const Usuario = require('../models/Usuario');
 exports.login = async (req, res) => {
     try {
         const { username, password } = req.body;
-        const availableUsers = ['Datax Dev'];
+        const availableUsers = ['Datax Dev', 'Hyperflow Dev'];
 
         const user = await Usuario.findOne({
             where: { nome: username },
