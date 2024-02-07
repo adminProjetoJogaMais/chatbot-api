@@ -27,6 +27,8 @@ exports.login = async (req, res) => {
 }
 
 exports.authenticate = async (req, res, next) => {
+    if (req.url === '/api/login') return next();
+
     try {
         const authHeader = req.headers['authorization'];
         const token = authHeader && authHeader.split(' ')[1];
