@@ -3,8 +3,11 @@ const express = require('express');
 const usuarioController = require('./controllers/UsuarioController');
 const timeController = require('./controllers/TimeController');
 const jogoController = require('./controllers/JogoController');
+const authController = require('./controllers/AuthenticationController');
 
 const routes = express.Router();
+
+routes.post('/login', authController.login);
 
 routes.get('/userbycellphone', usuarioController.getUserByCellphone);
 

@@ -45,8 +45,6 @@ app.use(express.json());
 
 app.use('/index.html', swaggerUi.serve, swaggerUi.setup(swaggerConfig));
 
-app.post('/api/login', authController.login);
-
 app.use(authController.authenticate);
 
 app.use('/api', routes);
