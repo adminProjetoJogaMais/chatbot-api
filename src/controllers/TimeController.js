@@ -90,7 +90,7 @@ exports.getTimeFreeDates = async (req, res) => {
 
 exports.getTimesAvailableAt = async (req, res) => {
     try {
-        var { data, hora_inicio, hora_fim, genero, modalidade, uf, visitante, subregiao_order_by } = req.query;
+        var { data, hora_inicio, hora_fim, genero, modalidade, uf, visitante, subregiao_order_by, page } = req.query;
 
         if (!data || !hora_inicio || !hora_fim || !genero || !modalidade || !uf || visitante === null || visitante === undefined) {
             return res.status(400).json({
@@ -100,12 +100,14 @@ exports.getTimesAvailableAt = async (req, res) => {
         };
 
         //make sure visitante fields is always on the right format
-        if([true, 'true', 'True', 1].includes(visitante)) visitante = 1;
+        if ([true, 'true', 'True', 1].includes(visitante)) visitante = 1;
         else visitante = 0;
 
         const parsedDate = moment(data);
         const day = parsedDate.format('YYYY/MM/DD');
         const dayOfWeek = DaysOfWeek[parsedDate.day()];
+
+        const offset = page ? (page - 1) * 10 : 0;
 
         const teams = await Time.findAll({
             where: {
@@ -113,6 +115,8 @@ exports.getTimesAvailableAt = async (req, res) => {
                 modalidade: modalidade,
                 ativo: 1
             },
+            offset: offset,
+            limit: 10,
             attributes: ['id_time', 'nome', 'sigla'],
             include: [
                 {
