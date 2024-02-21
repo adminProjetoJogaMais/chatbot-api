@@ -13,7 +13,8 @@ exports.login = async (req, res) => {
 
         if (!user || !await compare(password, user.senha) || !availableUsers.includes(user.nome)) return res.status(401).json({
             status: 'failed',
-            message: 'authentication failed'
+            message: 'authentication failed',
+            error: e
         });
 
         const accessToken = sign({ name: user.nome }, process.env.SECRET, { expiresIn: '1d' });
@@ -21,7 +22,8 @@ exports.login = async (req, res) => {
     } catch (e) {
         return res.status(401).json({
             status: 'failed',
-            message: 'authentication failed'
+            message: 'authentication failed',
+            error: e
         });
     }
 }
@@ -35,13 +37,15 @@ exports.authenticate = async (req, res, next) => {
 
         if (!token) return res.status(401).json({
             status: 'failed',
-            message: 'authentication failed'
+            message: 'authentication failed',
+            error: e
         });
 
         verify(token, process.env.SECRET, (err, user) => {
             if (err) return res.status(401).json({
                 status: 'failed',
-                message: 'authentication failed'
+                message: 'authentication failed',
+                error: e
             });
 
             next();
@@ -49,7 +53,8 @@ exports.authenticate = async (req, res, next) => {
     } catch (e) {
         return res.status(401).json({
             status: 'failed',
-            message: 'authentication failed'
+            message: 'authentication failed',
+            error: e
         });
     }
 }
