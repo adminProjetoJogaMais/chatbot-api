@@ -5,7 +5,7 @@ const doc = {
     title: 'Joga+ Chatbot API',
     description: ''
   },
-  host: 'localhost:8080',
+  host: 'http://3.23.79.231:8080',
   basePath: '/api',
   securityDefinitions: {
     bearerAuth: {
