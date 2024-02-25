@@ -107,7 +107,7 @@ exports.getTimesAvailableAt = async (req, res) => {
         const day = parsedDate.format('YYYY/MM/DD');
         const dayOfWeek = DaysOfWeek[parsedDate.day()];
 
-        const offset = page ? (page - 1) * 10 : 0;
+        const offset = page ? (page - 1) * 3 : 0;
 
         const teams = await Time.findAll({
             where: {
@@ -116,7 +116,7 @@ exports.getTimesAvailableAt = async (req, res) => {
                 ativo: 1
             },
             offset: offset,
-            limit: 10,
+            limit: 3,
             attributes: ['id_time', 'nome', 'sigla'],
             include: [
                 {
