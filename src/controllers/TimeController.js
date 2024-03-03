@@ -117,7 +117,7 @@ exports.getTimesAvailableAt = async (req, res) => {
             },
             offset: offset,
             limit: 3,
-            attributes: ['id_time', 'nome', 'sigla'],
+            attributes: ['id_time', 'nome'],
             include: [
                 {
                     association: 'bloquearDatas',
@@ -166,14 +166,14 @@ exports.getTimesAvailableAt = async (req, res) => {
                         visitante: visitante,
                         hora_inicio: { [Op.between]: [hora_inicio, hora_fim] }
                     },
-                    attributes: ['hora_inicio', 'hora_fim'],
+                    attributes: ['hora_inicio'],
                 },
                 {
                     association: 'endereco',
                     where: {
                         UF: uf
                     },
-                    attributes: ['cidade', 'bairro', 'regiao', 'subregiao']
+                    attributes: ['cidade', 'bairro', 'logradouro', 'numero', 'titulo']
                 }
             ],
         });
