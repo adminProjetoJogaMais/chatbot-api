@@ -135,6 +135,11 @@
         "description": "",
         "parameters": [
           {
+            "name": "id_time",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "data",
             "in": "query",
             "type": "string"
@@ -161,11 +166,6 @@
           },
           {
             "name": "uf",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "visitante",
             "in": "query",
             "type": "string"
           },
