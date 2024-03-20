@@ -88,124 +88,6 @@ exports.getTimeFreeDates = async (req, res) => {
     }
 }
 
-exports.getTimesAvailableAt = async (req, res) => {
-    try {
-        var { data, hora_inicio, hora_fim, genero, modalidade, uf, visitante, subregiao_order_by, page } = req.query;
-
-        if (!data || !hora_inicio || !hora_fim || !genero || !modalidade || !uf || visitante === null || visitante === undefined) {
-            return res.status(400).json({
-                status: 'failed',
-                message: 'please provide all the required fields: data, hora_inicio, hora_fim, genero, modalidade, uf, visitante'
-            });
-        };
-
-        //make sure visitante fields is always on the right format
-        if ([true, 'true', 'True', 1].includes(visitante)) visitante = 1;
-        else visitante = 0;
-
-        const parsedDate = moment(data);
-        const day = parsedDate.format('YYYY/MM/DD');
-        const dayOfWeek = DaysOfWeek[parsedDate.day()];
-
-        const offset = page ? (page - 1) * 3 : 0;
-
-        const teams = await Time.findAll({
-            where: {
-                genero: genero,
-                modalidade: modalidade,
-                ativo: 1
-            },
-            offset: offset,
-            limit: 3,
-            attributes: ['id_time', 'nome'],
-            include: [
-                {
-                    association: 'bloquearDatas',
-                    where: {
-                        data: day
-                    },
-                    required: false
-                },
-                {
-                    association: 'jogosMandante',
-                    where: {
-                        data_hora: {
-                            [Op.and]: {
-                                [Op.gte]: day + ' 00:00:00',
-                                [Op.lte]: day + ' 23:59:59.999999',
-                            }
-                        },
-                        status: { [Op.ne]: 'recusado' }
-                    },
-                    attributes: ['data_hora'],
-                    required: false
-                },
-                {
-                    association: 'jogosVisitante',
-                    where: {
-                        data_hora: {
-                            [Op.and]: {
-                                [Op.gte]: day + ' 00:00:00',
-                                [Op.lte]: day + ' 23:59:59.999999',
-                            }
-                        },
-                        status: { [Op.ne]: 'recusado' }
-                    },
-                    attributes: ['data_hora'],
-                    required: false
-                },
-                {
-                    association: 'programacoes',
-                    where: visitante ? {
-                        dia: dayOfWeek,
-                        visitante: visitante,
-                        hora_inicio: { [Op.lte]: hora_inicio },
-                        hora_fim: { [Op.gte]: hora_fim },
-                    } : {
-                        dia: dayOfWeek,
-                        visitante: visitante,
-                        hora_inicio: { [Op.between]: [hora_inicio, hora_fim] }
-                    },
-                    attributes: ['hora_inicio'],
-                },
-                {
-                    association: 'endereco',
-                    where: {
-                        UF: uf
-                    },
-                    attributes: ['cidade', 'bairro', 'logradouro', 'numero', 'titulo']
-                }
-            ],
-        });
-
-        const availableTeams = teams.filter(e => {
-            return !e.bloquearDatas.length && !e.jogosMandante.length && !e.jogosVisitante.length;
-        });
-
-        const availableTeamsFormatted = availableTeams.map(e => {
-            const formattedObj = e.toJSON();
-
-            delete formattedObj.bloquearDatas;
-            delete formattedObj.jogosMandante;
-            delete formattedObj.jogosVisitante;
-
-            return formattedObj;
-        });
-
-        availableTeamsFormatted.sort((a, b) => {
-            if (a.endereco.subregiao === subregiao_order_by && b.endereco.subregiao !== subregiao_order_by) return -1;
-            else return 0;
-        })
-
-        return res.json(availableTeamsFormatted);
-    } catch (e) {
-        res.status(500).json({
-            status: 'failed',
-            error: e.toString()
-        });
-    }
-}
-
 exports.getTimeJogos = async (req, res) => {
     try {
         const { id_time } = req.params;
@@ -249,4 +131,160 @@ exports.getTimeJogos = async (req, res) => {
             error: e.toString()
         });
     }
+}
+
+exports.getTimesAvailableAt = async (req, res) => {
+    try {
+        var { id_time, data, hora_inicio, hora_fim, genero, modalidade, uf, subregiao_order_by, page } = req.query;
+
+        if (!id_time || !data || !hora_inicio || !hora_fim || !genero || !modalidade || !uf) {
+            return res.status(400).json({
+                status: 'failed',
+                message: 'please provide all the required fields: id_time, data, hora_inicio, hora_fim, genero, modalidade, uf'
+            });
+        };
+
+        const availableTeams = [];
+        var offset = page ? (page - 1) * 3 : 0;
+        var shouldReturnTeamsWithGamesAgainstRequester = false;
+        while (availableTeams.length < 3) {
+            var teams = await getAvailableTeams(req.query, shouldReturnTeamsWithGamesAgainstRequester, offset);
+
+            teams.forEach(e => {
+                if (!e.bloquearDatas.length && !e.jogosMandante.length && availableTeams.length < 3) availableTeams.push(e);
+            });
+
+            //there are no available teams - return empty result
+            if (!teams.length && shouldReturnTeamsWithGamesAgainstRequester) {
+                break;
+            }
+            //there are no available teams that havnt played requester team yet - 
+            //search for available teams that have already played against requester
+            else if (!teams.length && !shouldReturnTeamsWithGamesAgainstRequester) {
+                shouldReturnTeamsWithGamesAgainstRequester = true;
+                teams = await getAvailableTeams(req.query, shouldReturnTeamsWithGamesAgainstRequester, offset);
+            };
+
+            offset += 3;
+        }
+
+        const availableTeamsFormatted = returnTeamsFormatted(availableTeams, subregiao_order_by);
+
+        return res.json(availableTeamsFormatted);
+    } catch (e) {
+        res.status(500).json({
+            status: 'failed',
+            error: e.toString()
+        });
+    }
+}
+
+const getAvailableTeams = async (params, shouldReturnTeamsWithGamesAgainstRequester, offset) => {
+    var { id_time, data, hora_inicio, hora_fim, genero, modalidade, uf } = params;
+
+    const parsedDate = moment(data);
+    const day = parsedDate.format('YYYY/MM/DD');
+    const dayOfWeek = DaysOfWeek[parsedDate.day()];
+    const dayMinusOneMonth = parsedDate.subtract(1, 'months').format('YYYY/MM/DD');
+
+    return await Time.findAll({
+        where: {
+            genero: genero,
+            modalidade: modalidade,
+            ativo: 1
+        },
+        include: [
+            {
+                association: 'bloquearDatas',
+                as: 'bloquearDatas',
+                where: {
+                    data: day
+                },
+                required: false,
+            },
+            {
+                association: 'jogosMandante',
+                where: returnJogosMandanteWhereObj(id_time, dayMinusOneMonth, day, shouldReturnTeamsWithGamesAgainstRequester),
+                attributes: ['data_hora'],
+                required: false
+            },
+            {
+                association: 'programacoes',
+                where: {
+                    dia: dayOfWeek,
+                    visitante: 0,
+                    hora_inicio: { [Op.between]: [hora_inicio, hora_fim] }
+                },
+                attributes: ['hora_inicio'],
+            },
+            {
+                association: 'endereco',
+                where: {
+                    UF: uf
+                },
+                attributes: ['cidade', 'bairro', 'logradouro', 'numero', 'titulo']
+            }
+        ],
+        offset: offset,
+        limit: 3,
+        attributes: ['id_time', 'nome'],
+    })
+}
+
+const returnJogosMandanteWhereObj = (id_time, dateFrom, date, shouldReturnTeamsWithGamesAgainstRequester) => {
+    if (!shouldReturnTeamsWithGamesAgainstRequester) {
+        return {
+            [Op.or]: [
+                //if team already have a game at the date
+                {
+                    data_hora: {
+                        [Op.and]: {
+                            [Op.gte]: date + ' 00:00:00',
+                            [Op.lte]: date + ' 23:59:59.999999',
+                        }
+                    }
+                },
+                //if team has already played against the team making the request in the past 30 days
+                {
+                    data_hora: { [Op.between]: [dateFrom + ' 00:00:00', date + ' 00:00:00'] },
+                    [Op.or]: [
+                        { id_time_1: id_time },
+                        { id_time_2: id_time },
+                    ]
+                }
+            ],
+            status: { [Op.ne]: 'recusado' }
+        }
+    } else {
+        return {
+            //if team already have a game at the date
+            data_hora: {
+                [Op.and]: {
+                    [Op.gte]: date + ' 00:00:00',
+                    [Op.lte]: date + ' 23:59:59.999999',
+                }
+            }
+        }
+    }
+}
+
+const returnTeamsFormatted = (teams, subregiao_order_by) => {
+    var teamsFormatted = teams.map(e => {
+        const formattedObj = e.toJSON();
+
+        delete formattedObj.bloquearDatas;
+        delete formattedObj.jogosMandante;
+        delete formattedObj.jogosVisitante;
+
+        return formattedObj;
+    });
+
+    if (subregiao_order_by) {
+        teamsFormatted.sort((a, b) => {
+            if (a.endereco.subregiao === subregiao_order_by && b.endereco.subregiao !== subregiao_order_by) return -1;
+            else return 0;
+        })
+    }
+
+    return teamsFormatted;
 }
