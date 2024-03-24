@@ -81,6 +81,11 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
           }
         ],
         "responses": {
