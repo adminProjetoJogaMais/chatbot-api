@@ -7,9 +7,11 @@ const { DaysOfWeek } = require('../utils/Enums')
 exports.getTimeFreeDates = async (req, res) => {
     try {
         const { id_time } = req.params;
+        const { page } = req.query;
 
-        const dateFrom = moment();
-        const dateTo = moment().add(60, 'days');
+        const daysToAdd = page ? (page - 1) * 30 : 0;
+        const dateFrom = moment().add(daysToAdd, 'days');
+        const dateTo = moment().add(daysToAdd + 30, 'days');
 
         const team = await Time.findByPk(id_time, {
             include: [
@@ -63,7 +65,7 @@ exports.getTimeFreeDates = async (req, res) => {
 
         const teamsFreeDays = [];
 
-        for (var i = 0; i < 60; i++) {
+        for (var i = 0; i < 30; i++) {
             var date = dateFrom.add(1, 'day');
 
             const dayOfWeek = DaysOfWeek[date.day()];
@@ -144,30 +146,7 @@ exports.getTimesAvailableAt = async (req, res) => {
             });
         };
 
-        const availableTeams = [];
-        var offset = page ? (page - 1) * 3 : 0;
-        var shouldReturnTeamsWithGamesAgainstRequester = false;
-        while (availableTeams.length < 3) {
-            var teams = await getAvailableTeams(req.query, shouldReturnTeamsWithGamesAgainstRequester, offset);
-
-            teams.forEach(e => {
-                if (!e.bloquearDatas.length && !e.jogosMandante.length && availableTeams.length < 3) availableTeams.push(e);
-            });
-
-            //there are no available teams - return empty result
-            if (!teams.length && shouldReturnTeamsWithGamesAgainstRequester) {
-                break;
-            }
-            //there are no available teams that havnt played requester team yet - 
-            //search for available teams that have already played against requester
-            else if (!teams.length && !shouldReturnTeamsWithGamesAgainstRequester) {
-                shouldReturnTeamsWithGamesAgainstRequester = true;
-                teams = await getAvailableTeams(req.query, shouldReturnTeamsWithGamesAgainstRequester, offset);
-            };
-
-            offset += 3;
-        }
-
+        const availableTeams = await returnAvailableTeams(req);
         const availableTeamsFormatted = returnTeamsFormatted(availableTeams, subregiao_order_by);
 
         return res.json(availableTeamsFormatted);
@@ -179,7 +158,41 @@ exports.getTimesAvailableAt = async (req, res) => {
     }
 }
 
-const getAvailableTeams = async (params, shouldReturnTeamsWithGamesAgainstRequester, offset) => {
+const returnAvailableTeams = async (req) => {
+    const availableTeams = [];
+    var shouldReturnTeamsWithGamesAgainstRequester = false;
+
+    var { page } = req.query;
+    //how many available teams should be skipped according to page's param
+    var offset = page ? (page - 1) * 3 : 0;
+    
+    var skip = 0;
+    while (availableTeams.length < offset + 3) {
+        var teams = await getTeamsAndDates(req.query, shouldReturnTeamsWithGamesAgainstRequester, skip);
+
+        teams.forEach(e => {
+            if (!e.bloquearDatas.length && !e.jogosMandante.length && availableTeams.length < (offset + 3)) availableTeams.push(e);
+        });
+
+        //there are no available teams - return empty result
+        if (!teams.length && shouldReturnTeamsWithGamesAgainstRequester) {
+            break;
+        }
+        //there are no available teams that havnt played requester team yet - 
+        //search for available teams that have already played against requester
+        else if (!teams.length && !shouldReturnTeamsWithGamesAgainstRequester) {
+            shouldReturnTeamsWithGamesAgainstRequester = true;
+            teams = await getTeamsAndDates(req.query, shouldReturnTeamsWithGamesAgainstRequester, skip);
+        };
+
+        skip += 3;
+    }
+
+    const availableTeamsLimited = availableTeams.slice(-3);
+    return availableTeamsLimited;
+}
+
+const getTeamsAndDates = async (params, shouldReturnTeamsWithGamesAgainstRequester, offset) => {
     var { id_time, data, hora_inicio, hora_fim, genero, modalidade, uf } = params;
 
     const parsedDate = moment(data);
@@ -196,7 +209,6 @@ const getAvailableTeams = async (params, shouldReturnTeamsWithGamesAgainstReques
         include: [
             {
                 association: 'bloquearDatas',
-                as: 'bloquearDatas',
                 where: {
                     data: day
                 },
